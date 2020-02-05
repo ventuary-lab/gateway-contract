@@ -1,0 +1,175 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+#
+# Smart Contract Implementing Bonds Auction in the Orderbook of Neutrino Protocol 
+#
+
+#-------------------Base functions----------------------
+func getNumberByKey(key: String) = {
+    match getInteger(this, key) {
+            case a:Int => a
+            case _ => 0
+    }
+}
+func getStringByKey(key: String) = {
+    match getString(this, key) {
+            case a:String => a
+            case _ => ""
+    }
+}
+
+#-------------------Constants---------------------------
+
+
+#------Order statuses------
+let NONE = ""
+let NEW = "new"
+let REJECTED = "rejected"
+let ACCEPTED = "accepted"
+let SUCCESS = "success"
+let RETURNED = "Returned"
+
+let LOCK = "lock"
+let UNLOCK = "unlock"
+#-------------------Constructor-------------------------
+let AssetIdKey = "asset_id"
+
+#-------------------Keys--------------------------------
+let AdminsKey = "admins"
+
+func getRqStatusKey(requestId: String) = "status_" + requestId
+func getRqTypeKey(requestId: String) = "type_" + requestId
+func getRqOwnerKey(requestId: String) = "owner_" + requestId
+func getRqTargetKey(requestId: String) = "target_" + requestId
+func getRqSecretKey(requestId: String) = "secret_" + requestId
+func getRqSecretHashKey(requestId: String) = "secret_hash_" + requestId
+func getRqAmountKey(requestId: String) = "amount_" + requestId
+func getRqExpireHeightKey(requestId: String) = "expire_height_" + requestId
+
+#-------------------Global vars-------------------------
+let admins = getStringByKey(AdminsKey).split(",")
+let assetId = fromBase58String(getStringByKey(AssetIdKey))
+#-------------------Get functions----------------------
+func getRqStatus(requestId: String) = getStringByKey(getRqStatusKey(requestId))
+func getRqType(requestId: String) = getStringByKey(getRqTypeKey(requestId))
+func getRqOwner(requestId: String) = getStringByKey(getRqOwnerKey(requestId))
+func getRqTarget(requestId: String) = getStringByKey(getRqTargetKey(requestId))
+func getRqSecret(requestId: String) = getStringByKey(getRqSecretKey(requestId))
+func getRqSecretHash(requestId: String) = getStringByKey(getRqSecretHashKey(requestId))
+func getRqAmount(requestId: String) = getNumberByKey(getRqAmountKey(requestId))
+func getRqExpireHeight(requestId: String) = getNumberByKey(getRqExpireHeightKey(requestId))
+
+#-------------------Callable---------------------------
+
+@Callable(i)
+func createLockRequest(recipient: String, secretHash: String, expireHeight: Int) = {
+    let pmt = extract(i.payment);
+    let requestId = toBase58String(keccak256(fromBase58String(toString(this)) + i.caller.bytes + i.transactionId + fromBase64String(recipient) + toBytes(expireHeight)))
+
+    if (pmt.assetId != assetId)
+        then throw("can use waves only")
+    else if(getRqOwner(requestId) != "")
+        then throw("request exists")
+    else {
+            WriteSet([
+                DataEntry(getRqStatusKey(requestId), NEW),
+                DataEntry(getRqTypeKey(requestId), LOCK),
+                DataEntry(getRqOwnerKey(requestId), toString(i.caller)),
+
+                DataEntry(getRqTargetKey(requestId), recipient),
+                DataEntry(getRqSecretHashKey(requestId), secretHash),
+                DataEntry(getRqAmountKey(requestId), pmt.amount),
+                DataEntry(getRqExpireHeightKey(requestId), expireHeight)
+            ])
+    }
+}
+
+@Callable(i)
+func cofirmUnlock(requestHash: String, secret: String) = {
+    if toBase58String(keccak256(fromBase64String(secret))) != getRqSecretHash(requestHash)
+        then throw("invalid secret")
+    else if(height > getRqExpireHeight(requestHash))
+        then throw("timeout is over yet")
+    else if(getRqStatus(requestHash) != ACCEPTED)
+        then throw("invalid status")
+    else if(getRqType(requestHash) != UNLOCK)
+       then throw("invalid type")
+    else {
+        WriteSet([
+            DataEntry(getRqStatusKey(requestHash), SUCCESS),
+            DataEntry(getRqSecretKey(requestHash), secret)
+        ])
+    }
+}
+
+@Callable(i)
+func createUnlockRequest(sender: String, recipientString: String, amount: Int, secretHash: String, expireHeight: Int, signsString: String) = {
+    let recipient = addressFromStringValue(recipientString)
+    let requestId = toBase58String(keccak256(fromBase58String(toString(this)) + i.caller.bytes + i.transactionId + fromBase58String(recipientString) + toBytes(expireHeight)))
+
+    let signs = signsString.split(",")
+    let count =  (if sigVerify(fromBase58String(requestId), fromBase58String(signs[0]), fromBase58String(admins[0])) then 1 else 0) +
+        (if sigVerify(fromBase58String(requestId), fromBase58String(signs[1]), fromBase58String(admins[1])) then 1 else 0) +
+        (if sigVerify(fromBase58String(requestId), fromBase58String(signs[2]), fromBase58String(admins[2])) then 1 else 0) +
+        (if sigVerify(fromBase58String(requestId), fromBase58String(signs[3]), fromBase58String(admins[3])) then 1 else 0) +
+        (if sigVerify(fromBase58String(requestId), fromBase58String(signs[4]), fromBase58String(admins[4])) then 1 else 0)
+    
+    if(count < 3) 
+        then throw("count is less 3")
+    else if(getRqOwner(requestId) != "")
+        then throw("request exists")
+    else {
+            WriteSet([
+                DataEntry(getRqStatusKey(requestId), NEW),
+                DataEntry(getRqTypeKey(requestId), LOCK),
+                DataEntry(getRqOwnerKey(requestId), recipientString),
+
+                DataEntry(getRqTargetKey(requestId), sender),
+                DataEntry(getRqSecretHashKey(requestId), secretHash),
+                DataEntry(getRqAmountKey(requestId), amount),
+                DataEntry(getRqExpireHeightKey(requestId), expireHeight)
+            ])
+    }
+}
+
+@Callable(i)
+func returnToSender(requestHash: String) = {
+    if(height <= getRqExpireHeight(requestHash))
+        then throw("timeout is not over yet")
+    else if(getRqStatus(requestHash) == SUCCESS && getRqStatus(requestHash) == RETURNED)
+        then throw("invalid status")
+    else if(getRqType(requestHash) != LOCK)
+        then throw("type is not burn")
+    else {
+        ScriptResult(
+            WriteSet([
+                DataEntry(getRqStatusKey(requestHash), RETURNED)
+            ]),
+            TransferSet([
+                ScriptTransfer(addressFromStringValue(getRqOwner(requestHash)), getRqAmount(requestHash), assetId)
+            ])
+        )
+    }
+}
+
+@Callable(i)
+func acceptedOrReject(requestHash: String, signsString: String, isAccepted: Boolean) = {
+    let signs = signsString.split(",")
+    let msg = requestHash + "_" + (if isAccepted then "true" else "false")
+    let count =  (if sigVerify(toBytes(msg), fromBase58String(signs[0]), fromBase58String(admins[0])) then 1 else 0) +
+        (if sigVerify(toBytes(msg), fromBase58String(signs[1]), fromBase58String(admins[1])) then 1 else 0) +
+        (if sigVerify(toBytes(msg), fromBase58String(signs[2]), fromBase58String(admins[2])) then 1 else 0) +
+        (if sigVerify(toBytes(msg), fromBase58String(signs[3]), fromBase58String(admins[3])) then 1 else 0) +
+        (if sigVerify(toBytes(msg), fromBase58String(signs[4]), fromBase58String(admins[4])) then 1 else 0)
+    
+    if(count < 3) 
+        then throw("count is less 3")
+    else if(getRqOwner(requestHash) == "")
+        then throw("request is not exists")
+    else {
+        WriteSet([
+            DataEntry(getRqStatusKey(requestHash), if isAccepted then ACCEPTED else REJECTED)
+        ])
+    }
+}
