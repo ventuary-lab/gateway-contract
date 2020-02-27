@@ -63,6 +63,26 @@ contract Supersymmetry {
         return requestHash;
     }
 
+    function changeStatusTest(bytes32 requestHash, uint8 intStatus) public {
+        require(requests[requestHash].status == Status.New, "status is now new");
+        require(intStatus != uint8(Status.None), "invalid status");
+        require(intStatus != uint8(Status.New), "invalid status");
+
+
+        Status status = Status(intStatus);
+        if (intStatus == uint8(Status.Success)) {
+            if (requests[requestHash].rType == Type.Mint) {
+                require(Token(tokenAddress).mint(requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
+            }
+        } else if (intStatus == uint8(Status.Rejected)) {
+            if (requests[requestHash].rType == Type.Burn) {
+                require(IERC20(tokenAddress).transferFrom(address(this), requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
+            }
+        }
+        requests[requestHash].status = status;
+        emit StatusChanged(requestHash, status);
+    }
+    
     function changeStatus(bytes32 requestHash, uint8[5] memory v, bytes32[5] memory r, bytes32[5] memory s, uint8 intStatus) public {
         require(requests[requestHash].status == Status.New, "status is now new");
         require(intStatus != uint8(Status.None), "invalid status");
