@@ -39,7 +39,7 @@ contract Supersymmetry {
     mapping(bytes32 => Request) public requests;
 
     function createBurnRequest(string memory recipient, uint256 amount) public returns (bytes32) {
-        require(IERC20(tokenAddress).transferFrom(msg.sender, address(this), amount), "invalid balance");
+        require(Token(tokenAddress).transferFrom(msg.sender, address(this), amount), "invalid balance");
         require(amount > 0, "value less or equals 0");
 
         bytes32 requestHash = sha256(abi.encodePacked(this, msg.sender, recipient, amount, block.number));
@@ -76,7 +76,7 @@ contract Supersymmetry {
             }
         } else if (intStatus == uint8(Status.Rejected)) {
             if (requests[requestHash].rType == Type.Burn) {
-                require(IERC20(tokenAddress).transferFrom(address(this), requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
+                require(Token(tokenAddress).transferFrom(address(this), requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
             }
         }
         requests[requestHash].status = status;
@@ -102,7 +102,7 @@ contract Supersymmetry {
             }
         } else if (intStatus == uint8(Status.Rejected)) {
             if (requests[requestHash].rType == Type.Burn) {
-                require(IERC20(tokenAddress).transferFrom(address(this), requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
+                require(Token(tokenAddress).transfer(requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
             }
         }
         requests[requestHash].status = status;
