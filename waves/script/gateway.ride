@@ -32,8 +32,10 @@ let AssetIdKey = "asset_id"
 
 #-------------------Keys--------------------------------
 let AdminsKey = "admins"
+let BftCoefficientKey = "bftCoefficient"
 
 func getRqStatusKey(requestId: String) = "status_" + requestId
+func getRqHeightKey(requestId: String) = "height_" + requestId
 func getRqTypeKey(requestId: String) = "type_" + requestId
 func getRqOwnerKey(requestId: String) = "owner_" + requestId
 func getRqTargetKey(requestId: String) = "target_" + requestId
@@ -42,7 +44,7 @@ func getRqAmountKey(requestId: String) = "amount_" + requestId
 #-------------------Global vars-------------------------
 let admins = getStringByKey(AdminsKey).split(",")
 let assetId = fromBase58String(getStringByKey(AssetIdKey))
-
+let bftCoefficient = getNumberByKey(BftCoefficientKey)
 #-------------------Get functions----------------------
 func getRqStatus(requestId: String) = getNumberByKey(getRqStatusKey(requestId))
 func getRqType(requestId: String) = getNumberByKey(getRqTypeKey(requestId))
@@ -74,6 +76,7 @@ func createLockRequest(recipient: String) = {
                 DataEntry(getRqTypeKey(requestId), LOCK),
                 DataEntry(getRqOwnerKey(requestId), toString(i.caller)),
 
+                DataEntry(getRqHeightKey(requestId), height),
                 DataEntry(getRqTargetKey(requestId), recipient),
                 DataEntry(getRqAmountKey(requestId), pmt.amount)
             ])
@@ -90,7 +93,7 @@ func changeStatus(requestHash: String, signsString: String, status: Int) = {
         (if sigVerify(toBytes(msg), fromBase58String(signs[3]), fromBase58String(admins[3])) then 1 else 0) +
         (if sigVerify(toBytes(msg), fromBase58String(signs[4]), fromBase58String(admins[4])) then 1 else 0)
     
-    if(count < 3) 
+    if(count < bftCoefficient) 
         then throw("count is less 3")
     else if(getRqOwner(requestHash) == "")
         then throw("request is not exists")
@@ -150,6 +153,7 @@ func createUnlockRequest(sender: String, amount: Int) = {
                 DataEntry(getRqTypeKey(requestId), UNLOCK),
                 DataEntry(getRqOwnerKey(requestId), toString(i.caller)),
 
+                DataEntry(getRqHeightKey(requestId), height),
                 DataEntry(getRqTargetKey(requestId), sender),
                 DataEntry(getRqAmountKey(requestId), amount)
             ])

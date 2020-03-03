@@ -19,6 +19,7 @@ contract Supersymmetry {
         Status status;
         Type rType;
         address owner;
+        uint256 height;
         string target;
         uint256 tokenAmount;
     }
@@ -46,7 +47,7 @@ contract Supersymmetry {
         require(requests[requestHash].status == Status.None, "swap exist");
 
         requests[requestHash] = Request(
-            {status: Status.New, rType: Type.Burn, owner: msg.sender, target: recipient, tokenAmount: amount });
+            {status: Status.New, rType: Type.Burn, owner: msg.sender, target: recipient, height: block.number, tokenAmount: amount });
         emit NewRequest(requestHash, msg.sender, recipient);
         return requestHash;
     }
@@ -58,7 +59,7 @@ contract Supersymmetry {
         require(requests[requestHash].status == Status.None, "swap exist");
 
         requests[requestHash] = Request(
-            {status: Status.New, rType: Type.Mint, owner: recipient, target: sender, tokenAmount: value });
+            {status: Status.New, rType: Type.Mint, owner: recipient, height: block.number, target: sender, tokenAmount: value });
         emit NewRequest(requestHash, recipient, sender);
         return requestHash;
     }
@@ -82,7 +83,6 @@ contract Supersymmetry {
         requests[requestHash].status = status;
         emit StatusChanged(requestHash, status);
     }
-    
     function changeStatus(bytes32 requestHash, uint8[5] memory v, bytes32[5] memory r, bytes32[5] memory s, uint8 intStatus) public {
         require(requests[requestHash].status == Status.New, "status is now new");
         require(intStatus != uint8(Status.None), "invalid status");
@@ -94,7 +94,8 @@ contract Supersymmetry {
                 v[i], r[i], s[i]) == admins[i] ? 1 : 0;
         }
 
-       require(count >= 3, "admins vote count is less 3");
+        require(count >= 3, "admins vote count is less 3");
+      
         Status status = Status(intStatus);
         if (intStatus == uint8(Status.Success)) {
             if (requests[requestHash].rType == Type.Mint) {
@@ -102,7 +103,7 @@ contract Supersymmetry {
             }
         } else if (intStatus == uint8(Status.Rejected)) {
             if (requests[requestHash].rType == Type.Burn) {
-                require(Token(tokenAddress).transfer(requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
+                require(Token(tokenAddress).transferFrom(address(this), requests[requestHash].owner, requests[requestHash].tokenAmount), "invalid balance");
             }
         }
         requests[requestHash].status = status;

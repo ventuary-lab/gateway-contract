@@ -23,6 +23,10 @@ describe('Deploy script', async function () {
         const constructorData = data({
             data: [
                 { key: "asset_id", value: signedIssueTx.id },
+                { key: "admins", value: "AXbaBkJNocyrVpwqTzD4TpUY8fQ6eeRto9k1m2bNCzXV,AXbaBkJNocyrVpwqTzD4TpUY8fQ6eeRto9k1m2bNCzXV" +
+                ",AXbaBkJNocyrVpwqTzD4TpUY8fQ6eeRto9k1m2bNCzXV,AXbaBkJNocyrVpwqTzD4TpUY8fQ6eeRto9k1m2bNCzXV,AXbaBkJNocyrVpwqTzD4TpUY8fQ6eeRto9k1m2bNCzXV"},
+                
+                { key: "bftCoefficient", value: 1}
             ],
             fee: 500000
         }, accounts.contract);
