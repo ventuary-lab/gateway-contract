@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/ventuary-lab/gateway-contract#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^2.5.0"
+    "@openzeppelin/contracts": "^4.7.2"
   }
 }
